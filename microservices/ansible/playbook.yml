@@ -1,6 +1,10 @@
+---
 - hosts: all
   become: yes
   tasks:
+    # ----------------------------
+    # Install required packages
+    # ----------------------------
     - name: Install required packages
       apt:
         name: ['docker.io', 'git', 'curl', 'python3-pip']
@@ -14,57 +18,95 @@
         enabled: yes
 
     - name: Install docker-compose
-      get_url:
-        url: "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-{{ ansible_system | lower }}-{{ ansible_architecture }}"
-        dest: /usr/local/bin/docker-compose
+      shell: |
+        curl -L "https://github.com/docker/compose/releases/download/1.29.2/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
+        chmod +x /usr/local/bin/docker-compose
+
+    - name: Verify docker-compose
+      command: docker-compose --version
+
+    # ----------------------------
+    # Install Java & Jenkins
+    # ----------------------------
+    - name: Install Java (required for Jenkins)
+      apt:
+        name: openjdk-17-jdk
+        state: present
+
+    - name: Add Jenkins repo key
+      shell: |
+        curl -fsSL https://pkg.jenkins.io/debian-stable/jenkins.io-2023.key | tee /usr/share/keyrings/jenkins-keyring.asc > /dev/null
+
+    - name: Add Jenkins repository
+      apt_repository:
+        repo: "deb [signed-by=/usr/share/keyrings/jenkins-keyring.asc] https://pkg.jenkins.io/debian-stable binary/"
+        state: present
+
+    - name: Install Jenkins
+      apt:
+        name: jenkins
+        state: present
+        update_cache: yes
+
+    - name: Ensure Jenkins is started and enabled
+      service:
+        name: jenkins
+        state: started
+        enabled: yes
+
+    - name: Show initial Jenkins password
+      command: cat /var/lib/jenkins/secrets/initialAdminPassword
+      register: jenkins_password
+      changed_when: false
+
+    - name: Display Jenkins password
+      debug:
+        msg: "Initial Jenkins Admin Password: {{ jenkins_password.stdout }}"
+
+    # ----------------------------
+    # Prepare microservices folder
+    # ----------------------------
+    - name: Ensure microservices directory exists
+      file:
+        path: /home/ubuntu/microservices
+        state: directory
+        owner: ubuntu
+        group: ubuntu
         mode: '0755'
-      args:
-        creates: /usr/local/bin/docker-compose
 
-
-- hosts: user_service
-  become: yes
-  tasks:
-    - name: Clone user repo
+    # ----------------------------
+    # Clone project repo
+    # ----------------------------
+    - name: Clone project repo
       git:
-        repo: 'GIT_URL_USER_SERVICE'
-        dest: /home/ubuntu/user-service
+        repo: 'https://github.com/Bha834/project-3.git'
+        dest: /home/ubuntu/microservices/project-3
         update: yes
       become_user: ubuntu
 
+    # ----------------------------
+    # Add ubuntu user to docker group
+    # ----------------------------
+    - name: Add ubuntu user to docker group
+      user:
+        name: ubuntu
+        groups: docker
+        append: yes
+
+    # ----------------------------
+    # Run Microservices with sudo
+    # ----------------------------
     - name: Run user service
-      shell: /usr/local/bin/docker-compose up -d --build
+      shell: sudo docker-compose up -d --build
       args:
-        chdir: /home/ubuntu/user-service
-
-
-- hosts: order_service
-  become: yes
-  tasks:
-    - name: Clone order repo
-      git:
-        repo: 'GIT_URL_ORDER_SERVICE'
-        dest: /home/ubuntu/order-service
-        update: yes
-      become_user: ubuntu
+        chdir: /home/ubuntu/microservices/project-3/microservices/user-service
 
     - name: Run order service
-      shell: /usr/local/bin/docker-compose up -d --build
+      shell: sudo docker-compose up -d --build
       args:
-        chdir: /home/ubuntu/order-service
+        chdir: /home/ubuntu/microservices/project-3/microservices/order-service
 
-
-- hosts: monitoring
-  become: yes
-  tasks:
-    - name: Clone monitoring repo
-      git:
-        repo: 'GIT_URL_MONITORING'  # contains prometheus.yml and docker-compose.yml
-        dest: /home/ubuntu/monitoring
-        update: yes
-      become_user: ubuntu
-
-    - name: Run monitoring stack
-      shell: /usr/local/bin/docker-compose up -d --build
+    - name: Run monitoring service
+      shell: sudo docker-compose up -d --build
       args:
-        chdir: /home/ubuntu/monitoring
+        chdir: /home/ubuntu/microservices/project-3/microservices/monitoring
