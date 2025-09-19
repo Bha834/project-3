@@ -1,0 +1,7 @@
+version: "3.8"
+services:
+  order:
+    build: .
+    image: "${DOCKERHUB_USER:-local}/order-service:latest"
+    ports:
+      - "5001:5001"
