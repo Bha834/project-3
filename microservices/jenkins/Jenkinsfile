@@ -1,0 +1,47 @@
+pipeline {
+  agent any
+
+  environment {
+    DOCKERHUB = credentials('dockerhub-creds')   // creates DOCKERHUB_USR and DOCKERHUB_PSW
+  }
+
+  stages {
+    stage('Checkout') {
+      steps { checkout scm }
+    }
+
+    stage('Build & Test user-service') {
+      steps {
+        dir('user-service') {
+          sh 'docker build -t $DOCKERHUB_USR/user-service:${GIT_COMMIT::7} .'
+        }
+      }
+    }
+
+    stage('Build & Test order-service') {
+      steps {
+        dir('order-service') {
+          sh 'docker build -t $DOCKERHUB_USR/order-service:${GIT_COMMIT::7} .'
+        }
+      }
+    }
+
+    stage('Push to DockerHub') {
+      steps {
+        sh 'echo $DOCKERHUB_PSW | docker login -u $DOCKERHUB_USR --password-stdin'
+        sh 'docker push $DOCKERHUB_USR/user-service:${GIT_COMMIT::7}'
+        sh 'docker push $DOCKERHUB_USR/order-service:${GIT_COMMIT::7}'
+      }
+    }
+
+    stage('Deploy with Ansible') {
+      steps {
+        sh 'ansible-playbook -i ansible/hosts.ini ansible/playbook.yml --private-key ~/.ssh/devops-key'
+      }
+    }
+  }
+
+  post {
+    always { echo "Pipeline finished" }
+  }
+}

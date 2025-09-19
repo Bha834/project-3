@@ -1,0 +1,37 @@
+# user-service/docker-compose.yml
+
+version: "3.8"
+services:
+  user:
+    build: .
+    image: yourdockerhubuser/user-service:latest
+    ports:
+      - "5000:5000"
+
+
+# order-service/docker-compose.yml
+
+version: "3.8"
+services:
+  order:
+    build: .
+    image: yourdockerhubuser/order-service:latest
+    ports:
+      - "5001:5001"
+
+
+# monitoring/docker-compose.yml (runs Prometheus + Grafana)
+
+version: "3.8"
+services:
+  prometheus:
+    image: prom/prometheus:latest
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+    ports:
+      - "9090:9090"
+
+  grafana:
+    image: grafana/grafana:latest
+    ports:
+      - "3000:3000"
