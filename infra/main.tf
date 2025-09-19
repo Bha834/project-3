@@ -94,3 +94,4 @@ output "order_ip" {
 output "monitor_ip" {
   value = aws_instance.monitoring.public_ip
 }
+
